@@ -48,10 +48,10 @@ report_date = selected_date
 report_date_prev = report_date - timedelta(days=1)
 month_start = report_date.replace(day=1)
 
-# --- Installed capacity input ---
-installed_capacity = st.sidebar.number_input(
-    "Enter Total Installed Capacity (kW)", min_value=1.0, value=990.0, step=10.0
-)
+# # --- Installed capacity input ---
+# installed_capacity = st.sidebar.number_input(
+#     "Enter Total Installed Capacity (kW)", min_value=1.0, value=990.0, step=10.0
+# )
 
 # --- Fetch data ---
 start_str = month_start.strftime("%d-%b-%Y")
