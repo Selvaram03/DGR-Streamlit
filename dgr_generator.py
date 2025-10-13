@@ -64,10 +64,11 @@ def get_daily_monthly_data(df, inverter_cols, month_start, report_date):
     return final_df, daily_generation, monthly_generation
 
 
-def calculate_kpis(customer, daily_generation, monthly_generation, installed_capacity):
+def calculate_kpis(customer, daily_generation, monthly_generation):
     """Calculate PLF and total generation metrics."""
     num_inverters = CUSTOMER_INVERTERS.get(customer, len(daily_generation))
     total_daily_gen = daily_generation.sum()
     total_monthly_gen = monthly_generation.sum()
     plf_percent = (total_daily_gen / (24 * 3.04 * num_inverters))
     return total_daily_gen, total_monthly_gen, plf_percent
+
