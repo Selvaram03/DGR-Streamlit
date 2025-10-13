@@ -1,0 +1,9 @@
+streamlit
+pandas
+pymongo
+openpyxl
+matplotlib
+pytz
+cryptography
+numpy
+opcua
