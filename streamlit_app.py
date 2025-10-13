@@ -30,7 +30,7 @@ st.set_page_config(page_title="DGR Generation Dashboard", layout="wide")
 
 # --- Sidebar ---
 with st.sidebar:
-    st.image("enrich_logo.png", use_column_width=True)  # replace with your logo file path
+    st.image("enrich_logo.png", use_container_width=True)  # replace with your logo file path
     st.title("DGR Dashboard Controls")
     
     # Customer selection
@@ -99,3 +99,4 @@ with open(output_file, "rb") as f:
         file_name=output_file,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
