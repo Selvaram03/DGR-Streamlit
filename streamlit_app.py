@@ -150,7 +150,7 @@ elif st.session_state.page == "live":
 
         if df.empty:
             summary_list.append({
-                "Customer": cust,
+                "Plant": cust,
                 "Total Daily Generation (kWh)": 0,
                 "PLF (%)": 0,
                 "Irradiation (kWh/m²)": 0
@@ -170,7 +170,7 @@ elif st.session_state.page == "live":
         total_daily_all += total_daily
 
         summary_list.append({
-            "Customer": cust,
+            "Plant": cust,
             "Total Daily Generation (kWh)": round(total_daily, 2),
             "PLF (%)": round(plf, 2),
             "Irradiation (kWh/m²)": round(daily_irr or 0, 2)
@@ -183,3 +183,4 @@ elif st.session_state.page == "live":
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df, width="stretch")
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
