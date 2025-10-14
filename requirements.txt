@@ -4,6 +4,7 @@ pymongo
 openpyxl
 matplotlib
 pytz
+opcua
 cryptography
 numpy
-opcua
+streamlit-autorefresh
