@@ -180,3 +180,4 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     total_monthly_gen = monthly_generation.sum()
     plf_percent = total_daily_gen / (24 * plf_base * num_inverters)
     return total_daily_gen, total_monthly_gen, plf_percent
+
