@@ -16,7 +16,7 @@ CUSTOMER_TABLES = {
     "Kasturi": "Kasturi",
     "Mauryaa": "Mauryaa",
     "Paranjape": "Paranjape",
-    "Rajgir": "Rajgir",
+    "BEL1": "Rajgir",
     "Vinathi_3": "Vinathi_3",
     "Vinathi_4": "Vinathi_4",
     "TMD": "TMD",
@@ -104,3 +104,4 @@ with open(output_file, "rb") as f:
         file_name=output_file,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
