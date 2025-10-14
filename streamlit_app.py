@@ -18,7 +18,7 @@ CUSTOMER_TABLES = {
     "Kasturi": "Kasturi",
     "Mauryaa": "Mauryaa",
     "Paranjape": "Paranjape",
-    "BEL1": "Rajgir",
+    "Rajgir": "Rajgir",
     "Vinathi_3": "Vinathi_3",
     "Vinathi_4": "Vinathi_4",
     "TMD": "TMD",
