@@ -18,7 +18,8 @@ CUSTOMER_TABLES = {
     "Kasturi": "Kasturi",
     "Mauryaa": "Mauryaa",
     "Paranjape": "Paranjape",
-    "Rajgir": "Rajgir",
+    "BEL1": "Rajgir",
+    "Vinathi_2": "PSS"
     "Vinathi_3": "Vinathi_3",
     "Vinathi_4": "Vinathi_4",
     "TMD": "TMD",
@@ -183,4 +184,5 @@ elif st.session_state.page == "live":
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df, width="stretch")
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
 
