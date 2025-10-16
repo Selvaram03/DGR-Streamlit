@@ -6,7 +6,7 @@ import pandas as pd
 CUSTOMER_INVERTERS = {
     "Imagica": 18,
     "BEL2": 1,
-    "Rajgir": 1,
+    "BEL1": 1,
     "Caspro": 11,
     "Dunung": 13,
     "Kasturi": 23,
@@ -16,7 +16,7 @@ CUSTOMER_INVERTERS = {
     "Vinathi_4": 15,
     "TMD": 9,
     "PGCIL": 32,
-    "PSS": 2
+    "Vinathi_2": 2
 }
 
 PLF_BASE = {
@@ -31,8 +31,8 @@ PLF_BASE = {
     "Mauryaa": 3.08,
     "Vinathi_3": 3.00,
     "Vinathi_4": 3.07,
-    "Rajgir": 10.00,
-    "PSS": 25.00
+    "BEL1": 10.00,
+    "Vinathi_2": 25.00
 }
 
 TMD_INVERTER_COLS = [
@@ -54,7 +54,7 @@ def clean_dataframe(df: pd.DataFrame, customer: str):
     """Clean and prepare data for generation and irradiation analysis."""
     if customer == "TMD":
         inverter_cols = [c for c in TMD_INVERTER_COLS if c in df.columns]
-    elif customer in ["BEL2", "Rajgir"]:
+    elif customer in ["BEL2", "BEL1"]:
         inverter_cols = [c for c in df.columns if "Meter_Generation" in c]
     elif customer == "PGCIL":
         inverter_cols = ["Total_Daily_Generation"]
@@ -100,7 +100,7 @@ def get_daily_monthly_data(df, inverter_cols, month_start, report_date, irradiat
         daily_generation = pd.Series([daily_generation_val], index=["Total_Daily_Generation_kWh"])
         inverter_names = ["Total_Meter_Generation"]
 
-    elif customer in ["BEL2", "Rajgir"]:
+    elif customer in ["BEL2", "BEL1"]:
         meter_col = [c for c in inverter_cols if "Meter_Generation" in c][0]
         daily_row = df.loc[df["day"] == prev_day_str]
         daily_generation_val = daily_row[meter_col].iloc[0] if not daily_row.empty else 0
@@ -149,7 +149,7 @@ def get_daily_monthly_data(df, inverter_cols, month_start, report_date, irradiat
             [merged_df["Total_Daily_Generation_kWh"].sum()],
             index=["Total_Daily_Generation_kWh"]
         )
-    elif customer in ["BEL2", "Rajgir"]:
+    elif customer in ["BEL2", "BEL1"]:
         meter_col = [c for c in inverter_cols if "Meter_Generation" in c][0]
         merged_df[meter_col] = merged_df[meter_col].fillna(0)
         monthly_generation = pd.Series([merged_df[meter_col].sum()], index=[meter_col])
@@ -182,6 +182,7 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     total_monthly_gen = monthly_generation.sum()
     plf_percent = total_daily_gen / (24 * plf_base * num_inverters)
     return total_daily_gen, total_monthly_gen, plf_percent
+
 
 
 
