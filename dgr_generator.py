@@ -54,7 +54,7 @@ def clean_dataframe(df: pd.DataFrame, customer: str):
     """Clean and prepare data for generation and irradiation analysis."""
     if customer == "TMD":
         inverter_cols = [c for c in TMD_INVERTER_COLS if c in df.columns]
-    elif customer in ["BEL2", "Rajgir"]:
+    elif customer in ["BEL2", "BEL1"]:
         inverter_cols = [c for c in df.columns if "Meter_Generation" in c]
     elif customer == "PGCIL":
         inverter_cols = ["Total_Daily_Generation"]
@@ -182,6 +182,7 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     total_monthly_gen = monthly_generation.sum()
     plf_percent = total_daily_gen / (24 * plf_base * num_inverters)
     return total_daily_gen, total_monthly_gen, plf_percent
+
 
 
 
