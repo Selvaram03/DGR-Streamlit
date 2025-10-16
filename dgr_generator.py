@@ -15,7 +15,7 @@ CUSTOMER_INVERTERS = {
     "Vinathi_3": 25,
     "Vinathi_4": 15,
     "TMD": 9,
-    "PGCIL": 32
+    "PGCIL": 32,
     "PSS": 2
 }
 
@@ -31,7 +31,7 @@ PLF_BASE = {
     "Mauryaa": 3.08,
     "Vinathi_3": 3.00,
     "Vinathi_4": 3.07,
-    "Rajgir": 10.00
+    "Rajgir": 10.00,
     "PSS": 25.00
 }
 
@@ -182,5 +182,6 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     total_monthly_gen = monthly_generation.sum()
     plf_percent = total_daily_gen / (24 * plf_base * num_inverters)
     return total_daily_gen, total_monthly_gen, plf_percent
+
 
 
