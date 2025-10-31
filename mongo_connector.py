@@ -10,95 +10,39 @@ DATABASE_NAME = "scada_db"
 
 def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: str, customer: str = None):
 
+    # Convert input dates to YYYY-MM-DD
     start_date = datetime.strptime(start_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
     end_date = datetime.strptime(end_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
 
     client = MongoClient(MONGO_URI)
     collection = client[DATABASE_NAME][collection_name]
 
-    # ✅ Base timestamp normalization
+    # ✅ NEW: Extract date using substring (no date conversion needed)
     base_pipeline = [
         {"$match": {"timestamp": {"$ne": None}}},
 
-        {
-            "$addFields": {
-                "ts": {
-                    "$switch": {
-                        "branches": [
-                            {
-                                "case": {"$eq": [{"$type": "$timestamp"}, "date"]},
-                                "then": "$timestamp",
-                            },
-                            {
-                                "case": {
-                                    "$and": [
-                                        {"$eq": [{"$type": "$timestamp"}, "string"]},
-                                        {
-                                            "$regexMatch": {
-                                                "input": "$timestamp",
-                                                "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$",
-                                            }
-                                        },
-                                    ]
-                                },
-                                "then": {
-                                    "$dateFromString": {
-                                        "dateString": "$timestamp",
-                                        "format": "%Y-%m-%d %H:%M",
-                                    }
-                                },
-                            },
-                        ],
-                        "default": None,
-                    }
-                }
-            }
-        },
+        # Extract date part: "2025-10-31"
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
 
-        {"$match": {"ts": {"$ne": None}}},
-
-        {
-            "$addFields": {
-                "day": {
-                    "$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}
-                }
-            }
-        },
-
+        # Filter by day
         {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
+
+        # Sort inside each day by timestamp descending
+        {"$sort": {"timestamp": -1}}
     ]
 
-    # ✅ For normal customers → pick latest record of each day
-    if customer != "PGCIL":
+    if customer == "PGCIL":
         pipeline = base_pipeline + [
-            {"$sort": {"ts": -1}},   # sort only filtered records
-            {
-                "$group": {
-                    "_id": "$day",
-                    "record": {"$first": "$$ROOT"}   # pick latest safely
-                }
-            },
-            {"$replaceRoot": {"newRoot": "$record"}},
-            {"$sort": {"day": 1}}
+            {"$group": {"_id": "$day", "last_10_records": {"$push": "$$ROOT"}}},
+            {"$project": {"last_record": {"$arrayElemAt": ["$last_10_records", 9]}}},
+            {"$replaceRoot": {"newRoot": "$last_record"}},
+            {"$sort": {"_id": 1}}
         ]
-
-    # ✅ For PGCIL → pick 10th latest record of each day
     else:
         pipeline = base_pipeline + [
-            {"$sort": {"ts": -1}},   # small sort after filtering
-            {
-                "$group": {
-                    "_id": "$day",
-                    "records": {"$push": "$$ROOT"}   # store all sorted
-                }
-            },
-            {
-                "$project": {
-                    "record": {"$arrayElemAt": ["$records", 9]}  # 10th record
-                }
-            },
-            {"$replaceRoot": {"newRoot": "$record"}},
-            {"$sort": {"day": 1}}
+            {"$group": {"_id": "$day", "last_record": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$last_record"}},
+            {"$sort": {"_id": 1}}
         ]
 
     cleaned_data = list(collection.aggregate(pipeline, allowDiskUse=True))
