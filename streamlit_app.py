@@ -80,7 +80,7 @@ if st.session_state.page == "report":
     start_str = month_start.strftime("%d-%b-%Y")
     end_str = report_date.strftime("%d-%b-%Y")
 
-    logger.info(
+    # logger.info(
         f"🔍 Fetching MongoDB data → Customer={customer}, Collection={collection_name}, Start={start_str}, End={end_str}"
     )
 
@@ -219,4 +219,5 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df)
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
 
