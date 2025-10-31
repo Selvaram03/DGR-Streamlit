@@ -16,10 +16,10 @@ IST = pytz.timezone("Asia/Kolkata")
 os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 os.environ["STREAMLIT_WATCHDOG"] = "false"
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
 
-logger.info("✅ App started successfully")
+# logger.info("✅ App started successfully")
 
 st.set_page_config(page_title="DGR Generation Dashboard", layout="wide")
 
@@ -90,9 +90,9 @@ if st.session_state.page == "report":
         df = fetch_cleaned_data(collection_name, start_str, end_str, customer)
 
     # ✅ DEBUG 1 — RAW DATA
-    st.subheader("✅ DEBUG: Raw Mongo Data Before Cleaning")
-    st.write("Shape:", df.shape)
-    st.dataframe(df.head())
+    # st.subheader("✅ DEBUG: Raw Mongo Data Before Cleaning")
+    # st.write("Shape:", df.shape)
+    # st.dataframe(df.head())
 
     if df.empty:
         st.error("❌ No data returned from MongoDB.")
@@ -102,11 +102,11 @@ if st.session_state.page == "report":
     df, inverter_cols, irradiation_col = clean_dataframe(df, customer)
 
     # ✅ DEBUG 2 — AFTER CLEANING
-    st.subheader("✅ DEBUG: After clean_dataframe()")
-    st.write("Shape:", df.shape)
-    st.write("Inverter Columns:", inverter_cols)
-    st.write("Irradiation Column:", irradiation_col)
-    st.dataframe(df.head())
+    # st.subheader("✅ DEBUG: After clean_dataframe()")
+    # st.write("Shape:", df.shape)
+    # st.write("Inverter Columns:", inverter_cols)
+    # st.write("Irradiation Column:", irradiation_col)
+    # st.dataframe(df.head())
 
     if df.empty:
         st.error("❌ clean_dataframe() removed all rows.")
@@ -119,9 +119,9 @@ if st.session_state.page == "report":
         )
 
     # ✅ DEBUG 3 — AFTER GENERATION PROCESSING
-    st.subheader("✅ DEBUG: After get_daily_monthly_data()")
-    st.write("Final DF Shape:", final_df.shape)
-    st.dataframe(final_df.head())
+    # st.subheader("✅ DEBUG: After get_daily_monthly_data()")
+    # st.write("Final DF Shape:", final_df.shape)
+    # st.dataframe(final_df.head())
 
     if final_df.empty:
         st.error("❌ get_daily_monthly_data() returned an empty dataframe.")
@@ -219,3 +219,4 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df)
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
