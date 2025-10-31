@@ -64,7 +64,7 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
         {"$match": {"timestamp": {"$exists": True, "$ne": None}}},
         _to_iso_date_pipeline(),
         {"$match": {"ts": {"$ne": None}}},
-        {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}}},
+        {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}},
         {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
         # sort before group so $first picks latest per day
         {"$sort": {"ts": -1}},
@@ -111,3 +111,4 @@ def fetch_latest_row(collection_name: str):
 
     client.close()
     return df
+
