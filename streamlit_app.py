@@ -10,6 +10,10 @@ from dgr_generator import clean_dataframe, get_daily_monthly_data, calculate_kpi
 
 IST = pytz.timezone("Asia/Kolkata")
 
+import os
+os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
+os.environ["STREAMLIT_WATCHDOG"] = "false"
+
 CUSTOMER_TABLES = {
     "Imagica": "opcua_data",
     "BEL2": "BEL2",
@@ -184,6 +188,7 @@ elif st.session_state.page == "live":
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df, width="stretch")
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
 
 
 
