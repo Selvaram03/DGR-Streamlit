@@ -16,7 +16,7 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     client = MongoClient(MONGO_URI)
     collection = client[DATABASE_NAME][collection_name]
 
-    # ✅ Base timestamp normalization (your logic kept exactly)
+    # ✅ Base timestamp normalization
     base_pipeline = [
         {"$match": {"timestamp": {"$ne": None}}},
 
@@ -26,28 +26,30 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
                     "$switch": {
                         "branches": [
                             {
-                                "case": { "$eq": [ { "$type": "$timestamp" }, "date" ] },
-                                "then": "$timestamp"
+                                "case": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                                "then": "$timestamp",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        { "$eq": [ { "$type": "$timestamp" }, "string" ] },
-                                        { "$regexMatch": {
-                                            "input": "$timestamp",
-                                            "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"
-                                        }}
+                                        {"$eq": [{"$type": "$timestamp"}, "string"]},
+                                        {
+                                            "$regexMatch": {
+                                                "input": "$timestamp",
+                                                "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$",
+                                            }
+                                        },
                                     ]
                                 },
                                 "then": {
                                     "$dateFromString": {
                                         "dateString": "$timestamp",
-                                        "format": "%Y-%m-%d %H:%M"
+                                        "format": "%Y-%m-%d %H:%M",
                                     }
-                                }
-                            }
+                                },
+                            },
                         ],
-                        "default": None
+                        "default": None,
                     }
                 }
             }
@@ -55,50 +57,51 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
 
         {"$match": {"ts": {"$ne": None}}},
 
-        {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}},
+        {
+            "$addFields": {
+                "day": {
+                    "$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}
+                }
+            }
+        },
 
         {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
     ]
 
-    # ✅ Heavy sort removed — replaced with lightweight max timestamp per day
-    # ✅ Prevents 32MB memory crash
-    group_stage = {
-        "$group": {
-            "_id": "$day",
-            "max_ts": {"$max": "$ts"}
-        }
-    }
-
-    pipeline = base_pipeline + [group_stage, {"$sort": {"_id": 1}}]
-
-    grouped = list(collection.aggregate(pipeline))
-    if not grouped:
-        client.close()
-        return pd.DataFrame()
-
-    final_docs = []
-
-    # ✅ Normal customer: fetch only 1 (latest) record per day
+    # ✅ For normal customers → pick latest record of each day
     if customer != "PGCIL":
-        for row in grouped:
-            doc = collection.find_one({"ts": row["max_ts"]})
-            if doc:
-                final_docs.append(doc)
+        pipeline = base_pipeline + [
+            {"$sort": {"ts": -1}},   # sort only filtered records
+            {
+                "$group": {
+                    "_id": "$day",
+                    "record": {"$first": "$$ROOT"}   # pick latest safely
+                }
+            },
+            {"$replaceRoot": {"newRoot": "$record"}},
+            {"$sort": {"day": 1}}
+        ]
 
-    # ✅ PGCIL: fetch the 10th latest
+    # ✅ For PGCIL → pick 10th latest record of each day
     else:
-        for row in grouped:
-            # Get latest 10 for the day safely, but sorted only inside the day
-            docs = list(
-                collection.find({"day": row["_id"]})
-                .sort("ts", -1)
-                .limit(10)
-            )
+        pipeline = base_pipeline + [
+            {"$sort": {"ts": -1}},   # small sort after filtering
+            {
+                "$group": {
+                    "_id": "$day",
+                    "records": {"$push": "$$ROOT"}   # store all sorted
+                }
+            },
+            {
+                "$project": {
+                    "record": {"$arrayElemAt": ["$records", 9]}  # 10th record
+                }
+            },
+            {"$replaceRoot": {"newRoot": "$record"}},
+            {"$sort": {"day": 1}}
+        ]
 
-            if len(docs) >= 10:
-                final_docs.append(docs[9])  # 10th record
-            elif docs:
-                final_docs.append(docs[-1])  # fallback to last available
-
+    cleaned_data = list(collection.aggregate(pipeline, allowDiskUse=True))
     client.close()
-    return pd.DataFrame(final_docs)
+
+    return pd.DataFrame(cleaned_data)
