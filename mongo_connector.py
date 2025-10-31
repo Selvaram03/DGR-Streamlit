@@ -5,7 +5,7 @@ from datetime import datetime
 import streamlit as st
 import logging
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 MONGO_URI = st.secrets["MONGO_URI"]
 DATABASE_NAME = "scada_db"
@@ -19,7 +19,7 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     client = MongoClient(MONGO_URI)
     coll = client[DATABASE_NAME][collection_name]
 
-    logger.info(f"Fetching data for {collection_name} from {start_date} → {end_date}")
+    # logger.info(f"Fetching data for {collection_name} from {start_date} → {end_date}")
 
     # ✅ NO SORTING IN MONGO (removes memory limit error)
     pipeline = [
@@ -64,7 +64,7 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     raw_data = list(coll.aggregate(pipeline, allowDiskUse=True))
     df = pd.DataFrame(raw_data)
 
-    logger.info(f"✅ Filtered docs returned: {df.shape[0]}")
+    # logger.info(f"✅ Filtered docs returned: {df.shape[0]}")
 
     # ✅ SORT LOCALLY (safe)
     if "ts" in df.columns:
@@ -72,3 +72,4 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
 
     client.close()
     return df
+
