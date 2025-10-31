@@ -175,15 +175,25 @@ else:
 
     summary_list = []
     total_daily_all = 0
+    
+    # 💡 MODIFICATION START: Define start and end date for live data (Today only)
+    today_start_date = datetime.now(IST).date()
+    today_end_date = today_start_date + timedelta(days=1)
+    
+    today_start_str = today_start_date.strftime("%d-%b-%Y")
+    today_end_str = today_end_date.strftime("%d-%b-%Y")
+    # 💡 MODIFICATION END
 
     for cust, coll in CUSTOMER_TABLES.items():
+        
+        # 💡 MODIFICATION: Use today's date range for "live" data fetch
         df = fetch_cleaned_data(
             coll,
-            month_start.strftime("%d-%b-%Y"),
-            report_date.strftime("%d-%b-%Y"),
+            today_start_str, # Use today as start date
+            today_end_str,   # Use today + 1 day as end date (to cover today's data)
             cust
         )
-
+        
         if df.empty:
             summary_list.append({
                 "Plant": cust, 
@@ -217,3 +227,4 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df)
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
