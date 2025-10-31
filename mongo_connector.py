@@ -27,21 +27,20 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     total_docs = coll.count_documents({})
     logger.info(f"📦 Total Docs in Collection '{collection_name}': {total_docs}")
 
-    # ✅ Pipeline MUST include ALL FIELDS
+    # ✅ 1: FILTER first (before sorting)
     pipeline = [
         {"$match": {"timestamp": {"$exists": True, "$ne": None}}},
 
+        # ✅ Convert all string timestamps
         {
             "$addFields": {
                 "ts": {
                     "$switch": {
                         "branches": [
-                            # Case A: ISODate
                             {
                                 "case": { "$eq": [ { "$type": "$timestamp" }, "date" ] },
                                 "then": "$timestamp"
                             },
-                            # Case B: "YYYY-MM-DD HH:mm"
                             {
                                 "case": {
                                     "$and": [
@@ -70,10 +69,13 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
 
         {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}},
 
-        # ✅ Filter only days in range
+        # ✅ FILTER by day before sorting → reduces dataset massively
         {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
 
-        # ✅ MUST NOT use $project → or you lose inverter columns
+        # ✅ LIMIT to avoid large memory usage
+        {"$limit": 100000},
+
+        # ✅ SORT at end (after filtering) → safe
         {"$sort": {"ts": -1}},
     ]
 
