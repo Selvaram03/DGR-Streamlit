@@ -1,21 +1,15 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
-import os
-
 from streamlit_autorefresh import st_autorefresh
-from mongo_connector import fetch_cleaned_data, fetch_latest_row
-from dgr_generator import clean_dataframe, get_daily_monthly_data, calculate_kpis
+
+from mongo_connector import fetch_cleaned_data
+from dgr_generator import clean_dataframe, calculate_kpis
 
 IST = pytz.timezone("Asia/Kolkata")
-st.set_page_config(page_title="DGR Dashboard", layout="wide")
+st.set_page_config(page_title="DGR Generation Dashboard", layout="wide")
 
-
-# ---------------------------------------
-# Customer mapping
-# ---------------------------------------
 CUSTOMER_TABLES = {
     "Imagica": "opcua_data",
     "BEL2": "BEL2",
@@ -29,115 +23,82 @@ CUSTOMER_TABLES = {
     "Vinathi_3": "Vinathi_3",
     "Vinathi_4": "Vinathi_4",
     "TMD": "TMD",
-    "PGCIL": "PGCIL"
+    "PGCIL": "PGCIL",
 }
 
-# ---------------------------------------
+# -------------------------------------------------------
 # Sidebar
-# ---------------------------------------
+# -------------------------------------------------------
 if "page" not in st.session_state:
     st.session_state.page = "report"
 
 with st.sidebar:
     st.image("enrich_logo.png")
     st.title("DGR Dashboard Controls")
-
-    if st.button("📊 Customer Report"):
+    if st.button("📊 DGR Customer Report"):
         st.session_state.page = "report"
-
-    if st.button("🔴 Live Data"):
+    if st.button("🔴 Live Generation Data"):
         st.session_state.page = "live"
 
-
+# -------------------------------------------------------
+# Date Controls
+# -------------------------------------------------------
 today_date = datetime.now().date()
+month_start = today_date.replace(day=1)
+report_date = today_date + timedelta(days=1)
 
-if st.session_state.page == "report":
-    report_date = st.date_input("Select Report Date", today_date)
-else:
-    report_date = today_date + timedelta(days=1)
-
-month_start = report_date.replace(day=1)
-
-
-# ---------------------------------------------------------
-# REPORT PAGE
-# ---------------------------------------------------------
-if st.session_state.page == "report":
-
-    customer = st.selectbox("Select Customer", list(CUSTOMER_TABLES.keys()))
-    coll = CUSTOMER_TABLES[customer]
-
-    start = month_start.strftime("%d-%b-%Y")
-    end = report_date.strftime("%d-%b-%Y")
-
-    st.info(f"Fetching data for {customer} from {start} to {end}...")
-
-    df = fetch_cleaned_data(coll, start, end, customer)
-
-    if df.empty:
-        st.error("No data found.")
-        st.stop()
-
-    df, inv_cols, irr_col = clean_dataframe(df, customer)
-
-    final_df, daily, monthly, daily_irr, month_irr = get_daily_monthly_data(
-        df, inv_cols, month_start, report_date, irr_col, customer
-    )
-
-    total_daily, total_monthly, plf = calculate_kpis(customer, daily, monthly)
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Daily (kWh)", f"{total_daily:.2f}")
-    c2.metric("PLF (%)", f"{plf:.2f}")
-    c3.metric("Monthly Total (kWh)", f"{total_monthly:.2f}")
-
-    st.dataframe(final_df)
-
-
-# ---------------------------------------------------------
-# ✅ LIVE PAGE — ALWAYS FETCH LATEST ROW
-# ---------------------------------------------------------
-else:
+# -------------------------------------------------------
+# ✅ LIVE PAGE (Option 1)
+# -------------------------------------------------------
+if st.session_state.page == "live":
     st.title("🔴 Live Generation Data (All Customers)")
-    st.caption("Always shows the LATEST row from each plant.")
+    st.caption("Latest generation and irradiation data for all customers.")
+    st_autorefresh(interval=60_000, limit=None, key="live_refresh")
 
-    st_autorefresh(interval=60000, key="live_refresh")
+    summary_list = []
+    total_daily_all = 0
 
-    summary = []
-    total_all = 0
-
-    for customer, coll in CUSTOMER_TABLES.items():
-
-        df = fetch_latest_row(coll)
-
-        if df.empty:
-            summary.append({
-                "Plant": customer,
-                "Total Daily Generation (kWh)": 0,
-                "PLF (%)": 0,
-                "Irradiation (kWh/m²)": 0
-            })
-            continue
-
-        df, inv_cols, irr_col = clean_dataframe(df, customer)
-
-        final_df, daily, monthly, irr, monthirr = get_daily_monthly_data(
-            df, inv_cols, month_start, report_date, irr_col, customer
+    for cust, coll in CUSTOMER_TABLES.items():
+        df = fetch_cleaned_data(
+            coll,
+            month_start.strftime("%d-%b-%Y"),
+            report_date.strftime("%d-%b-%Y"),
+            cust,
+            live_mode=True,  # only latest row
         )
 
-        total_daily, total_monthly, plf = calculate_kpis(customer, daily, monthly)
+        if df.empty:
+            summary_list.append(
+                {"Plant": cust, "Total Daily Generation (kWh)": 0, "PLF (%)": 0, "Irradiation (kWh/m²)": 0}
+            )
+            continue
 
-        total_all += total_daily
+        df, inverter_cols, irradiation_col = clean_dataframe(df, cust)
 
-        summary.append({
-            "Plant": customer,
-            "Total Daily Generation (kWh)": round(total_daily, 2),
-            "PLF (%)": round(plf, 2),
-            "Irradiation (kWh/m²)": round(irr, 2)
-        })
+        if not inverter_cols:
+            summary_list.append(
+                {"Plant": cust, "Total Daily Generation (kWh)": 0, "PLF (%)": 0, "Irradiation (kWh/m²)": 0}
+            )
+            continue
 
-    st.metric("Total Generation (All Plants)", f"{round(total_all, 2)} kWh")
+        latest_row = df.iloc[-1]
+        daily_gen = latest_row[inverter_cols]
+        monthly_gen = daily_gen  # not relevant for live
+        daily_irr = latest_row[irradiation_col] if irradiation_col else 0
 
-    st.dataframe(pd.DataFrame(summary))
+        total_daily, _, plf = calculate_kpis(cust, daily_gen, monthly_gen)
+        total_daily_all += total_daily
 
-    st.caption(f"Last Updated: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+        summary_list.append(
+            {
+                "Plant": cust,
+                "Total Daily Generation (kWh)": round(total_daily, 2),
+                "PLF (%)": round(plf, 2),
+                "Irradiation (kWh/m²)": round(daily_irr, 2),
+            }
+        )
+
+    st.metric("Total Generation of All Customers (kWh)", f"{round(total_daily_all, 2)}")
+    summary_df = pd.DataFrame(summary_list)
+    st.dataframe(summary_df)
+    st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
