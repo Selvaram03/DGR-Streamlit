@@ -7,12 +7,7 @@ import os
 
 from streamlit_autorefresh import st_autorefresh
 from mongo_connector import fetch_cleaned_data, fetch_latest_row
-from dgr_generator import (
-    clean_dataframe,
-    get_daily_monthly_data_report,
-    get_daily_monthly_data_live,
-    calculate_kpis,
-)
+from dgr_generator import clean_dataframe, get_daily_monthly_data_report, get_daily_monthly_data_live, calculate_kpis
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -171,3 +166,4 @@ else:
     st.dataframe(summary_df, width="stretch")
     # no timestamps shown per your request
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
