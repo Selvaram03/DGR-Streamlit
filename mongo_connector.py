@@ -9,42 +9,55 @@ DATABASE_NAME = "scada_db"
 
 
 def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: str, customer: str = None):
-    # Convert dd-MMM-YYYY -> YYYY-MM-DD for day-level comparison
-    start_date = datetime.strptime(start_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
+
+    start_date = datetime.strptime(start_date_str, "%d-%b-%Y")
+    end_date = datetime.strptime(end_date_str, "%d-%b-%Y")
 
     client = MongoClient(MONGO_URI)
     collection = client[DATABASE_NAME][collection_name]
 
-    # ✅ Base pipeline for all customers (convert timestamp + match by day)
     base_pipeline = [
         {"$match": {"timestamp": {"$ne": None}}},
 
-        # ✅ Convert "2025-10-31 09:49" → Date → "2025-10-31"
+        # ✅ NORMALIZE TIMESTAMP (handle string + ISODate)
         {
             "$addFields": {
-                "day": {
-                    "$dateToString": {
-                        "date": {
+                "ts": {
+                    "$cond": [
+                        { "$eq": [ { "$type": "$timestamp" }, "string" ] },
+                        {
                             "$dateFromString": {
                                 "dateString": "$timestamp",
                                 "format": "%Y-%m-%d %H:%M"
                             }
                         },
+                        "$timestamp"
+                    ]
+                }
+            }
+        },
+
+        # ✅ Convert timestamp → day string
+        {
+            "$addFields": {
+                "day": {
+                    "$dateToString": {
+                        "date": "$ts",
                         "format": "%Y-%m-%d"
                     }
                 }
             }
         },
 
-        # ✅ Match by day only (ignore time)
-        {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
+        # ✅ Filter by day (ignore time)
+        {"$match": {"day": {"$gte": start_date.strftime("%Y-%m-%d"),
+                            "$lte": end_date.strftime("%Y-%m-%d")}}},
 
-        # ✅ Sort latest to oldest within each day
-        {"$sort": {"timestamp": -1}},
+        # ✅ Sort latest to oldest inside each day
+        {"$sort": {"ts": -1}},
     ]
 
-    # ✅ Special PGCIL logic: pick 10th record of each day
+    # ✅ Special logic for PGCIL (10th record)
     if customer == "PGCIL":
         pipeline = base_pipeline + [
             {"$group": {"_id": "$day", "last_10_records": {"$push": "$$ROOT"}}},
@@ -52,8 +65,6 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
             {"$replaceRoot": {"newRoot": "$last_record"}},
             {"$sort": {"day": 1}}
         ]
-
-    # ✅ Default logic: pick the latest record of each day
     else:
         pipeline = base_pipeline + [
             {"$group": {"_id": "$day", "last_record": {"$first": "$$ROOT"}}},
@@ -61,7 +72,6 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
             {"$sort": {"day": 1}}
         ]
 
-    # ✅ Execute
     cleaned_data = list(collection.aggregate(pipeline))
     client.close()
 
