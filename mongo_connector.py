@@ -16,22 +16,20 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     client = MongoClient(MONGO_URI)
     collection = client[DATABASE_NAME][collection_name]
 
+    # ✅ Base timestamp normalization (your logic kept exactly)
     base_pipeline = [
         {"$match": {"timestamp": {"$ne": None}}},
 
-        # ✅ NORMALIZE TIMESTAMP (handle ISODate, Full date-time string, ignore "HH:mm")
         {
             "$addFields": {
                 "ts": {
                     "$switch": {
                         "branches": [
                             {
-                                # Case A: timestamp is ISO date
                                 "case": { "$eq": [ { "$type": "$timestamp" }, "date" ] },
                                 "then": "$timestamp"
                             },
                             {
-                                # Case B: timestamp is "YYYY-MM-DD HH:MM"
                                 "case": {
                                     "$and": [
                                         { "$eq": [ { "$type": "$timestamp" }, "string" ] },
@@ -49,40 +47,58 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
                                 }
                             }
                         ],
-                        # Case C: invalid format ("16:52") → discard
                         "default": None
                     }
                 }
             }
         },
 
-        # ✅ Remove invalid timestamps
         {"$match": {"ts": {"$ne": None}}},
 
-        # ✅ Extract day
         {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}},
 
-        # ✅ Filter by day
         {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
-
-        # ✅ Sort inside day
-        {"$sort": {"ts": -1}},
     ]
 
-    if customer == "PGCIL":
-        pipeline = base_pipeline + [
-            {"$group": {"_id": "$day", "last_10_records": {"$push": "$$ROOT"}}},
-            {"$project": {"last_record": {"$arrayElemAt": ["$last_10_records", 9]}}},
-            {"$replaceRoot": {"newRoot": "$last_record"}},
-            {"$sort": {"day": 1}}
-        ]
-    else:
-        pipeline = base_pipeline + [
-            {"$group": {"_id": "$day", "last_record": {"$first": "$$ROOT"}}},
-            {"$replaceRoot": {"newRoot": "$last_record"}},
-            {"$sort": {"day": 1}}
-        ]
+    # ✅ Heavy sort removed — replaced with lightweight max timestamp per day
+    # ✅ Prevents 32MB memory crash
+    group_stage = {
+        "$group": {
+            "_id": "$day",
+            "max_ts": {"$max": "$ts"}
+        }
+    }
 
-    cleaned_data = list(collection.aggregate(pipeline, allowDiskUse=True))
+    pipeline = base_pipeline + [group_stage, {"$sort": {"_id": 1}}]
+
+    grouped = list(collection.aggregate(pipeline))
+    if not grouped:
+        client.close()
+        return pd.DataFrame()
+
+    final_docs = []
+
+    # ✅ Normal customer: fetch only 1 (latest) record per day
+    if customer != "PGCIL":
+        for row in grouped:
+            doc = collection.find_one({"ts": row["max_ts"]})
+            if doc:
+                final_docs.append(doc)
+
+    # ✅ PGCIL: fetch the 10th latest
+    else:
+        for row in grouped:
+            # Get latest 10 for the day safely, but sorted only inside the day
+            docs = list(
+                collection.find({"day": row["_id"]})
+                .sort("ts", -1)
+                .limit(10)
+            )
+
+            if len(docs) >= 10:
+                final_docs.append(docs[9])  # 10th record
+            elif docs:
+                final_docs.append(docs[-1])  # fallback to last available
+
     client.close()
-    return pd.DataFrame(cleaned_data)
+    return pd.DataFrame(final_docs)
