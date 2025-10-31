@@ -14,6 +14,14 @@ import os
 os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 os.environ["STREAMLIT_WATCHDOG"] = "false"
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info("✅ App started")
+logger.info(f"Start: {start_date_str}, End: {end_date_str}")
+
+
 CUSTOMER_TABLES = {
     "Imagica": "opcua_data",
     "BEL2": "BEL2",
@@ -188,6 +196,7 @@ elif st.session_state.page == "live":
     summary_df = pd.DataFrame(summary_list)
     st.dataframe(summary_df, width="stretch")
     st.caption(f"Last refreshed at {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
+
 
 
 
