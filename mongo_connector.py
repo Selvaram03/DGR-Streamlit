@@ -10,8 +10,8 @@ DATABASE_NAME = "scada_db"
 
 def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: str, customer: str = None):
 
-    start_date = datetime.strptime(start_date_str, "%d-%b-%Y")
-    end_date = datetime.strptime(end_date_str, "%d-%b-%Y")
+    start_date = datetime.strptime(start_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
+    end_date = datetime.strptime(end_date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
 
     client = MongoClient(MONGO_URI)
     collection = client[DATABASE_NAME][collection_name]
@@ -19,45 +19,56 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
     base_pipeline = [
         {"$match": {"timestamp": {"$ne": None}}},
 
-        # ✅ NORMALIZE TIMESTAMP (handle string + ISODate)
+        # ✅ NORMALIZE TIMESTAMP (handle ISODate, Full date-time string, ignore "HH:mm")
         {
             "$addFields": {
                 "ts": {
-                    "$cond": [
-                        { "$eq": [ { "$type": "$timestamp" }, "string" ] },
-                        {
-                            "$dateFromString": {
-                                "dateString": "$timestamp",
-                                "format": "%Y-%m-%d %H:%M"
+                    "$switch": {
+                        "branches": [
+                            {
+                                # Case A: timestamp is ISO date
+                                "case": { "$eq": [ { "$type": "$timestamp" }, "date" ] },
+                                "then": "$timestamp"
+                            },
+                            {
+                                # Case B: timestamp is "YYYY-MM-DD HH:MM"
+                                "case": {
+                                    "$and": [
+                                        { "$eq": [ { "$type": "$timestamp" }, "string" ] },
+                                        { "$regexMatch": {
+                                            "input": "$timestamp",
+                                            "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"
+                                        }}
+                                    ]
+                                },
+                                "then": {
+                                    "$dateFromString": {
+                                        "dateString": "$timestamp",
+                                        "format": "%Y-%m-%d %H:%M"
+                                    }
+                                }
                             }
-                        },
-                        "$timestamp"
-                    ]
-                }
-            }
-        },
-
-        # ✅ Convert timestamp → day string
-        {
-            "$addFields": {
-                "day": {
-                    "$dateToString": {
-                        "date": "$ts",
-                        "format": "%Y-%m-%d"
+                        ],
+                        # Case C: invalid format ("16:52") → discard
+                        "default": None
                     }
                 }
             }
         },
 
-        # ✅ Filter by day (ignore time)
-        {"$match": {"day": {"$gte": start_date.strftime("%Y-%m-%d"),
-                            "$lte": end_date.strftime("%Y-%m-%d")}}},
+        # ✅ Remove invalid timestamps
+        {"$match": {"ts": {"$ne": None}}},
 
-        # ✅ Sort latest to oldest inside each day
+        # ✅ Extract day
+        {"$addFields": {"day": {"$dateToString": {"date": "$ts", "format": "%Y-%m-%d"}}}},
+
+        # ✅ Filter by day
+        {"$match": {"day": {"$gte": start_date, "$lte": end_date}}},
+
+        # ✅ Sort inside day
         {"$sort": {"ts": -1}},
     ]
 
-    # ✅ Special logic for PGCIL (10th record)
     if customer == "PGCIL":
         pipeline = base_pipeline + [
             {"$group": {"_id": "$day", "last_10_records": {"$push": "$$ROOT"}}},
@@ -74,5 +85,4 @@ def fetch_cleaned_data(collection_name: str, start_date_str: str, end_date_str: 
 
     cleaned_data = list(collection.aggregate(pipeline))
     client.close()
-
     return pd.DataFrame(cleaned_data)
