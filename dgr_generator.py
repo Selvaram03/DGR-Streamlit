@@ -47,6 +47,7 @@ TMD_INVERTER_COLS = [
     "T2_INV2_GenPowerToday"
 ]
 
+
 # ----------------------------
 # Data Cleaning
 # ----------------------------
@@ -69,7 +70,8 @@ def clean_dataframe(df: pd.DataFrame, customer: str):
             ])
         ]
 
-    df[inverter_cols] = df[inverter_cols].fillna(0)
+    if inverter_cols:
+        df[inverter_cols] = df[inverter_cols].fillna(0)
 
     # Detect Irradiation column
     irradiation_col = None
@@ -78,6 +80,7 @@ def clean_dataframe(df: pd.DataFrame, customer: str):
             irradiation_col = col
             df[col] = df[col].fillna(0)
 
+    # Normalize & sort day
     df["day"] = pd.to_datetime(df["day"]).dt.strftime("%Y-%m-%d")
     df = df.sort_values("day")
 
@@ -87,28 +90,48 @@ def clean_dataframe(df: pd.DataFrame, customer: str):
 # ----------------------------
 # Daily & Monthly Calculations
 # ----------------------------
-def get_daily_monthly_data(df, inverter_cols, month_start, report_date, irradiation_col=None, customer=None):
-    report_date_prev = report_date - pd.Timedelta(days=1)
-    prev_day_str = report_date_prev.strftime("%Y-%m-%d")
+def get_daily_monthly_data(
+    df,
+    inverter_cols,
+    month_start,              # kept for backwards compatibility (ignored)
+    report_date,
+    irradiation_col=None,
+    customer=None
+):
+    """
+    Compute daily and month-to-date (MTD) values.
+
+    IMPORTANT:
+    - All calculations are aligned to the 'data day' = report_date - 1 day.
+    - MTD window = [first_of_month(data_day), data_day]
+    """
+    # The day we actually have complete data for
+    data_day = pd.to_datetime(report_date) - pd.Timedelta(days=1)
+    data_day_str = data_day.strftime("%Y-%m-%d")
+
+    # Derive MTD window from the data day
+    month_start_local = pd.Timestamp(year=data_day.year, month=data_day.month, day=1)
+    month_end_local = data_day
 
     # --- DAILY GENERATION ---
     if customer == "PGCIL":
-        df["Total_Daily_Generation_kWh"] = df["Total_Daily_Generation"] * 1000
-        last_10 = df.tail(10)
-        daily_row = last_10.iloc[0] if not last_10.empty else None
-        daily_generation_val = daily_row["Total_Daily_Generation_kWh"] if daily_row is not None else 0
+        df["Total_Daily_Generation_kWh"] = df["Total_Daily_Generation"].fillna(0) * 1000
+        daily_row = df.loc[df["day"] == data_day_str]
+        daily_generation_val = (
+            daily_row["Total_Daily_Generation_kWh"].iloc[0] if not daily_row.empty else 0
+        )
         daily_generation = pd.Series([daily_generation_val], index=["Total_Daily_Generation_kWh"])
         inverter_names = ["Total_Meter_Generation"]
 
     elif customer in ["BEL2", "BEL1"]:
         meter_col = [c for c in inverter_cols if "Meter_Generation" in c][0]
-        daily_row = df.loc[df["day"] == prev_day_str]
+        daily_row = df.loc[df["day"] == data_day_str]
         daily_generation_val = daily_row[meter_col].iloc[0] if not daily_row.empty else 0
         daily_generation = pd.Series([daily_generation_val], index=[meter_col])
         inverter_names = ["Total_Meter_Generation"]
 
     else:
-        daily_row = df.loc[df["day"] == prev_day_str]
+        daily_row = df.loc[df["day"] == data_day_str]
         daily_generation = (
             daily_row[inverter_cols].iloc[0]
             if not daily_row.empty
@@ -116,35 +139,28 @@ def get_daily_monthly_data(df, inverter_cols, month_start, report_date, irradiat
         )
         inverter_names = [f"Inverter-{i+1}" for i in range(len(inverter_cols))]
 
-    # --- DAILY IRRADIATION ---
+    # --- DAILY / MONTHLY IRRADIATION ---
     daily_irradiation = None
     monthly_avg_irradiation = None
     if irradiation_col:
-        if customer == "PGCIL":
-            last_10 = df[irradiation_col].tail(10)
-            daily_irradiation = last_10.iloc[0] if not last_10.empty else 0
-        else:
-            daily_row_val = df.loc[df["day"] == prev_day_str]
-            daily_irradiation = daily_row_val[irradiation_col].iloc[0] if not daily_row_val.empty else 0
+        daily_row_val = df.loc[df["day"] == data_day_str]
+        daily_irradiation = (
+            daily_row_val[irradiation_col].iloc[0] if not daily_row_val.empty else 0
+        )
 
-        # Monthly average irradiation
-        month_dates = pd.date_range(start=month_start, end=report_date)
         df["day_dt"] = pd.to_datetime(df["day"])
+        month_dates = pd.date_range(start=month_start_local, end=month_end_local)
         merged_df = pd.DataFrame({"day_dt": month_dates}).merge(df, on="day_dt", how="left")
         merged_df[irradiation_col] = merged_df[irradiation_col].fillna(0)
-        if customer == "PGCIL":
-            last_10_monthly = merged_df[irradiation_col].tail(10)
-            monthly_avg_irradiation = last_10_monthly.iloc[0] if not last_10_monthly.empty else 0
-        else:
-            monthly_avg_irradiation = merged_df[irradiation_col].mean()
+        monthly_avg_irradiation = merged_df[irradiation_col].mean()
 
-    # --- MONTHLY GENERATION ---
-    month_dates = pd.date_range(start=month_start, end=report_date)
+    # --- MONTHLY GENERATION (MTD) ---
     df["day_dt"] = pd.to_datetime(df["day"])
+    month_dates = pd.date_range(start=month_start_local, end=month_end_local)
     merged_df = pd.DataFrame({"day_dt": month_dates}).merge(df, on="day_dt", how="left")
 
     if customer == "PGCIL":
-        merged_df["Total_Daily_Generation_kWh"] = merged_df["Total_Daily_Generation"] * 1000
+        merged_df["Total_Daily_Generation_kWh"] = merged_df["Total_Daily_Generation"].fillna(0) * 1000
         monthly_generation = pd.Series(
             [merged_df["Total_Daily_Generation_kWh"].sum()],
             index=["Total_Daily_Generation_kWh"]
@@ -154,8 +170,11 @@ def get_daily_monthly_data(df, inverter_cols, month_start, report_date, irradiat
         merged_df[meter_col] = merged_df[meter_col].fillna(0)
         monthly_generation = pd.Series([merged_df[meter_col].sum()], index=[meter_col])
     else:
-        merged_df[inverter_cols] = merged_df[inverter_cols].fillna(0)
-        monthly_generation = merged_df[inverter_cols].sum()
+        if inverter_cols:
+            merged_df[inverter_cols] = merged_df[inverter_cols].fillna(0)
+            monthly_generation = merged_df[inverter_cols].sum()
+        else:
+            monthly_generation = pd.Series([], dtype=float)
 
     # --- Final DF for visualization ---
     daily_df = pd.DataFrame({
@@ -178,7 +197,9 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     """Calculate total daily, monthly generation and PLF based on customer-specific constants."""
     num_inverters = CUSTOMER_INVERTERS[customer]
     plf_base = PLF_BASE[customer]
-    total_daily_gen = daily_generation.sum()
-    total_monthly_gen = monthly_generation.sum()
-    plf_percent = total_daily_gen / (24 * plf_base * num_inverters)
+    total_daily_gen = float(daily_generation.sum())
+    total_monthly_gen = float(monthly_generation.sum())
+    # Avoid division by zero
+    denom = 24 * plf_base * num_inverters if (plf_base and num_inverters) else 1
+    plf_percent = (total_daily_gen / denom) * 100
     return total_daily_gen, total_monthly_gen, plf_percent
