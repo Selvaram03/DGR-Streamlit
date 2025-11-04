@@ -201,5 +201,6 @@ def calculate_kpis(customer, daily_generation, monthly_generation):
     total_monthly_gen = float(monthly_generation.sum())
     # Avoid division by zero
     denom = 24 * plf_base * num_inverters if (plf_base and num_inverters) else 1
-    plf_percent = (total_daily_gen / denom) * 100
+    plf_percent = (total_daily_gen / denom)
     return total_daily_gen, total_monthly_gen, plf_percent
+
